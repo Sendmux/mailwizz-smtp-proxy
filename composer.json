@@ -1,0 +1,29 @@
+{
+    "name": "sendmux/mailwizz-email-proxy-api",
+    "description": "Sendmux Email Proxy API Extension for MailWizz - Integrates email delivery with automatic bounce and complaint handling",
+    "type": "mailwizz-extension",
+    "license": "FSL-2.0",
+    "authors": [
+        {
+            "name": "Sendmux Team",
+            "email": "contact@sendmux.ai",
+            "homepage": "https://sendmux.ai"
+        }
+    ],
+    "keywords": [
+        "mailwizz",
+        "email",
+        "delivery",
+        "bounce-handling",
+        "webhooks",
+        "sendmux"
+    ],
+    "homepage": "https://sendmux.ai",
+    "support": {
+        "email": "contact@sendmux.ai",
+        "source": "https://github.com/Sendmux/mailwizz-smtp-proxy"
+    },
+    "require": {
+        "php": ">=8.0"
+    }
+}
