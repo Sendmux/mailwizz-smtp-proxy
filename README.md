@@ -16,13 +16,12 @@
   </picture>
 </p>
 
-# MailWizz Email Delivery Extension for Sendmux SMTP Proxy
+# MailWizz Email Delivery Extension
+### for [Sendmux](https://sendmux.ai) HTTP/SMTP Email Proxy
 
 Connect [MailWizz](https://www.mailwizz.com/) to [Sendmux](https://sendmux.ai) HTTP/SMTP Email Proxy — route emails through multiple SMTP providers with smart rate limiting, automatic failover, and bounce/complaint handling via webhooks.
 
 📖 [Sendmux](https://sendmux.ai) | 📚 [Documentation](https://docs.sendmux.ai) | 📧 [Contact Support](mailto:contact@sendmux.ai)
-
-[![Watch the Setup Guide](https://img.youtube.com/vi/4ZgM9qSMTAI/maxresdefault.jpg?v=1 "Sendmux MailWizz Extension - Setup Guide")](https://www.youtube.com/watch?v=4ZgM9qSMTAI)
 
 ---
 
@@ -39,15 +38,38 @@ Sendmux is a smart email proxy that sits between your MailWizz instance and your
 ```mermaid
 graph LR
     A[MailWizz] -->|HTTP API| B[Sendmux Proxy]
-    B -->|Smart Routing| C[Provider #1]
-    B -->|Smart Routing| D[Provider #2]
-    B -->|Smart Routing| E[Provider #3]
-    B -->|Auto-Failover| F[Provider #N]
+    B -->|Smart Routing| C[Gmail #1]
+    B -->|Smart Routing| D[Gmail #2]
+    B -->|Smart Routing| E[Outlook #1]
+    B -->|Auto-Failover| F[SMTP #1]
     C --> G[Recipients]
     D --> G
     E --> G
     F --> G
 ```
+
+## Who It's For
+
+- **Cold Email Marketers** — scale outreach across multiple SMTP accounts with smart rate limiting to prevent provider bans
+- **Cold Email Agencies** — manage client campaigns with per-account quotas, failover, and pay-as-you-go billing
+- **Lead Generation Teams** — B2B outbound automation with multi-SMTP rotation and delivery tracking
+- **SaaS Applications** — reliable transactional emails (password resets, notifications)
+- **Marketing Teams** — campaign distribution across providers automatically
+- **E-commerce Platforms** — order confirmations and shipping notifications with guaranteed delivery
+- **Developers** — drop-in SMTP replacement or REST API integration
+
+## Key Benefits
+
+| Benefit | Details |
+|---|---|
+| 💰 **Affordable** | Send 1,000 emails for just a few cents. No monthly fees. [See pricing](https://sendmux.ai) |
+| 🚀 **100% Delivery Success** | Reliable message queueing ensures every email is handed off to your providers |
+| ⚡ **Built for Scale** | 10+ million emails/day capacity, 1,000+ emails/sec at peak |
+| 🤖 **Human-Like Sending** | Randomized rate limits mimic natural sending behavior |
+| 🎯 **Flexible Routing** | Percentage-based distribution, group routing, per-provider quotas |
+| 🛡️ **Enterprise Security** | Encrypted credentials, TLS/SSL, DDoS protection, audit logging |
+| 📊 **Full Visibility** | Real-time delivery tracking and provider performance metrics |
+| ♻️ **Zero Downtime** | Automatic failover bypasses failed providers instantly |
 
 ## Requirements
 
@@ -172,29 +194,6 @@ Sendmux provides comprehensive APIs for both sending and managing your email inf
 > 💻 **CLI** — manage providers, send emails, and view logs from the command line
 >
 > 📬 **Email Inboxes for AI Agents** — dedicated inboxes that AI agents can read, reply to, and act on autonomously
-
-## Key Benefits
-
-| Benefit | Details |
-|---|---|
-| 💰 **Affordable** | Send 1,000 emails for just a few cents. No monthly fees. [See pricing](https://sendmux.ai) |
-| 🚀 **100% Delivery Success** | Reliable message queueing ensures every email is handed off to your providers |
-| ⚡ **Built for Scale** | 10+ million emails/day capacity, 1,000+ emails/sec at peak |
-| 🤖 **Human-Like Sending** | Randomized rate limits mimic natural sending behavior |
-| 🎯 **Flexible Routing** | Percentage-based distribution, group routing, per-provider quotas |
-| 🛡️ **Enterprise Security** | Encrypted credentials, TLS/SSL, DDoS protection, audit logging |
-| 📊 **Full Visibility** | Real-time delivery tracking and provider performance metrics |
-| ♻️ **Zero Downtime** | Automatic failover bypasses failed providers instantly |
-
-## Who It's For
-
-- **Cold Email Marketers** — scale outreach across multiple SMTP accounts with smart rate limiting to prevent provider bans
-- **Cold Email Agencies** — manage client campaigns with per-account quotas, failover, and pay-as-you-go billing
-- **Lead Generation Teams** — B2B outbound automation with multi-SMTP rotation and delivery tracking
-- **SaaS Applications** — reliable transactional emails (password resets, notifications)
-- **Marketing Teams** — campaign distribution across providers automatically
-- **E-commerce Platforms** — order confirmations and shipping notifications with guaranteed delivery
-- **Developers** — drop-in SMTP replacement or REST API integration
 
 ## FAQ
 
