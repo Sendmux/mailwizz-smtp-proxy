@@ -17,7 +17,7 @@
 </p>
 
 # MailWizz Email Delivery Extension
-### for [Sendmux](https://sendmux.ai) HTTP/SMTP Email Proxy
+## for Sendmux HTTP/SMTP Email Proxy
 
 Connect [MailWizz](https://www.mailwizz.com/) to [Sendmux](https://sendmux.ai) HTTP/SMTP Email Proxy — route emails through multiple SMTP providers with smart rate limiting, automatic failover, and bounce/complaint handling via webhooks.
 
