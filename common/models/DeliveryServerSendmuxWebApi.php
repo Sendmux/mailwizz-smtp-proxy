@@ -6,9 +6,9 @@ if (!defined('MW_PATH')) {
 }
 
 /**
- * Sendmux Email Proxy API Delivery Server Model
+ * Sendmux Sending API Delivery Server Model
  *
- * Handles email sending via Sendmux Email Proxy API with automatic bounce
+ * Handles email sending via Sendmux Sending API with automatic bounce
  * and complaint handling through webhooks.
  *
  * @package MailWizz Extension
@@ -16,23 +16,23 @@ if (!defined('MW_PATH')) {
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.1.0
+ * @version 0.2.0
  */
 
 class DeliveryServerSendmuxWebApi extends DeliveryServer
 {
     /**
-     * Sendmux Email Proxy API endpoint
+     * Sendmux Sending API endpoint
      */
     const EMAIL_PROXY_URL = 'https://smtp.sendmux.ai/api/v1/emails/send';
 
     /**
-     * Sendmux Email Proxy hostname
+     * Sendmux API hostname
      */
     const EMAIL_PROXY_HOSTNAME = 'smtp.sendmux.ai';
 
     /**
-     * Email proxy URL for sending emails
+     * Sendmux API URL for sending emails
      * @var string
      */
     public string $emailProxyUrl = self::EMAIL_PROXY_URL;
@@ -65,8 +65,7 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public function attributeLabels()
     {
         $labels = [
-            'username'   => t('servers', 'Username'),
-            'password'   => t('servers', 'Sending API Key'),
+            'password'   => t('servers', 'API Key'),
         ];
         return CMap::mergeArray(parent::attributeLabels(), $labels);
     }
@@ -77,8 +76,7 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public function attributeHelpTexts()
     {
         $texts = [
-            'username' => t('servers', 'Any value (not used for authentication).'),
-            'password' => t('servers', 'Your Sendmux Sending API key (starts with smx_).'),
+            'password' => t('servers', 'Your Sendmux Sending Key (starts with smx_). To create one: go to the Sendmux dashboard, click "API Keys" in the sidebar, click "Create API Key", select "Sending Key", give it a name, choose your provider scope, and click "Create Key".'),
         ];
 
         return CMap::mergeArray(parent::attributeHelpTexts(), $texts);
@@ -90,7 +88,6 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public function attributePlaceholders()
     {
         $placeholders = [
-            'username'  => t('servers', 'Any value'),
             'password'  => t('servers', 'smx_...'),
         ];
 
@@ -152,7 +149,7 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     }
 
     /**
-     * Send email via Sendmux Email Proxy API
+     * Send email via Sendmux Sending API
      *
      * @param array $params
      * @return array
@@ -199,18 +196,17 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
                 $returnPath = 'bounce@' . $fromDomain;
             }
 
-            // Build payload using Sendmux API format
-            // See: https://docs.sendmux.ai/api-reference/emails/send-a-single-email
+            // Build base payload (Sendmux API format)
             $postData = [
-                'from' => [
-                    'email' => !empty($fromEmail) ? $fromEmail : $this->from_email,
-                    'name'  => !empty($fromName) ? $fromName : $this->from_name,
-                ],
-                'to' => [
+                'to'          => [
                     'email' => $toEmail,
                     'name'  => $toName ?? $toEmail,
                 ],
-                'reply_to' => [
+                'from'        => [
+                    'email' => !empty($fromEmail) ? $fromEmail : $this->from_email,
+                    'name'  => !empty($fromName) ? $fromName : $this->from_name,
+                ],
+                'reply_to'    => [
                     'email' => !empty($replyToEmail) ? $replyToEmail : $this->from_email,
                     'name'  => !empty($replyToName) ? $replyToName : $this->from_name,
                 ],
@@ -251,11 +247,14 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
                 }
             }
 
-            // Send request to Sendmux API using Bearer token authentication
+            // Create Bearer Auth header (Sendmux API key)
+            $authHeader = 'Bearer ' . $this->password;
+
+            // Send request to Sendmux API
             $response = (new GuzzleHttp\Client())->post($this->emailProxyUrl, [
                 'headers'   => [
                     'Content-Type'  => 'application/json',
-                    'Authorization' => 'Bearer ' . $this->password,
+                    'Authorization' => $authHeader,
                 ],
                 'timeout'   => (int)$this->timeout,
                 'json'      => $postData,
@@ -281,12 +280,18 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
                 $responseBody = (string)$e->getResponse()->getBody();
                 $errorData = json_decode($responseBody, true);
 
-                if (isset($errorData['error'])) {
-                    $errorMessage = $errorData['error'];
+                // Sendmux error format: {"ok":false,"error":{"code":"...","message":"...","param":"..."}}
+                if (isset($errorData['error']['message'])) {
+                    $errorMessage = $errorData['error']['message'];
 
-                    // Add details if available (validation errors)
-                    if (isset($errorData['details'])) {
-                        $errorMessage .= ' - ' . $errorData['details'];
+                    // Add error code if available
+                    if (isset($errorData['error']['code'])) {
+                        $errorMessage = '[' . $errorData['error']['code'] . '] ' . $errorMessage;
+                    }
+
+                    // Add param if available (validation errors)
+                    if (isset($errorData['error']['param'])) {
+                        $errorMessage .= ' (field: ' . $errorData['error']['param'] . ')';
                     }
                 }
             }
@@ -321,6 +326,7 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     {
         $form = new CActiveForm();
         return parent::getFormFieldsDefinition(CMap::mergeArray([
+            'username'                => null,
             'hostname'                => null,
             'port'                    => null,
             'protocol'                => null,

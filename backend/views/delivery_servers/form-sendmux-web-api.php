@@ -4,16 +4,16 @@ if (!defined('MW_PATH')) {
 }
 
 /**
- * Sendmux Email Proxy API - Backend Delivery Server Form
+ * Sendmux Sending API - Backend Delivery Server Form
  *
- * Admin interface for configuring Sendmux Email Proxy API delivery servers.
+ * Admin interface for configuring Sendmux Sending API delivery servers.
  *
  * @package MailWizz Extension
  * @author Sendmux Team <contact@sendmux.ai>
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.1.0
+ * @version 0.2.0
  */
 
 /** @var Controller $controller */
@@ -133,7 +133,14 @@ if ($viewCollection->itemAt('renderContent')) {
                     </div>
                     <div class="modal-body">
                         <?php echo t('servers', 'The url where this server expects to receive webhooks requests to process bounces and complaints is: {url}', ['{url}' => sprintf('<strong>%s</strong>', $server->getDswhUrl())]); ?><br /><br />
-	                    <?php echo t('servers', 'Please manually configure this webhook URL in your Sendmux account. Webhooks are no longer created automatically.'); ?><br />
+	                    <?php echo t('servers', 'Please manually configure this webhook URL in your Sendmux dashboard under webhook settings.'); ?><br /><br />
+                        <strong><?php echo t('servers', 'How to get your Sendmux Sending Key:'); ?></strong><br />
+                        <?php echo t('servers', '1. Log in to your Sendmux dashboard at {url}', ['{url}' => '<a href="https://app.sendmux.ai" target="_blank">app.sendmux.ai</a>']); ?><br />
+                        <?php echo t('servers', '2. Click "API Keys" in the sidebar menu'); ?><br />
+                        <?php echo t('servers', '3. Click "Create API Key" and select "Sending Key"'); ?><br />
+                        <?php echo t('servers', '4. Give it a name, choose your provider scope (all active providers, specific providers, or delivery groups), and click "Create Key"'); ?><br />
+                        <?php echo t('servers', '5. Copy the generated key (starts with smx_) and paste it into the API Key field above'); ?><br /><br />
+                        <?php echo t('servers', 'Sending via Sendmux costs just a few cents per 1,000 emails. Visit {url} for full pricing.', ['{url}' => '<a href="https://sendmux.ai" target="_blank">sendmux.ai</a>']); ?>
                     </div>
 
                 </div>

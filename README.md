@@ -98,7 +98,7 @@ Navigate to your team's **Billing** page via the sidebar navigation. Top up your
   - Reply-to email, Reply-to name
   - Traffic percentage (100 = highest priority)
 
-### 4. Generate a Sending API Key
+### 4. Generate a Sending Key
 - In the Sendmux dashboard, navigate to **API Keys** from the sidebar
 - Click **Create API Key**
 - Select **Sending Key** (used to send email via API, CLI, MCP, or AI agents)
@@ -118,7 +118,6 @@ Navigate to your team's **Billing** page via the sidebar navigation. Top up your
 ### 6. Create Delivery Server
 - Go to **Delivery Servers → Create New**
 - Select **Sendmux Web API** from the server type dropdown
-- **Username**: Enter any value (not used for authentication)
 - **API Key**: Paste the Sending Key from step 4
 - Save the delivery server
 
@@ -210,10 +209,10 @@ Yes. Configure as many providers as you need in Sendmux, set traffic percentages
 Sendmux automatically detects the failure and routes emails through your remaining active providers with zero downtime. No manual intervention required.
 
 ### Is the username field important?
-No. Only the **Sending API Key** (password field) is used for authentication. The username field can be set to any value.
+No. The username field is not shown when configuring this delivery server. Only the **API Key** field is used — paste your Sendmux Sending Key there.
 
 ### What format does the API key use?
-Sendmux Sending API keys start with `smx_`. You can create and manage them from the **API Keys** section in the Sendmux dashboard.
+Sendmux Sending Keys start with `smx_`. To create one: go to the Sendmux dashboard, click **API Keys** in the sidebar, click **Create API Key**, select **Sending Key**, give it a name, choose your provider scope, and click **Create Key**.
 
 ## License
 

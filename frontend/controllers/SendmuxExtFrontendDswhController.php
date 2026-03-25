@@ -3,19 +3,19 @@
 Yii::import('frontend.controllers.DswhController');
 
 /**
- * Sendmux Email Proxy API Webhook Controller
+ * Sendmux Sending API Webhook Controller
  *
- * Handles webhook events from Sendmux Email Proxy API for bounce and complaint processing.
+ * Handles webhook events from Sendmux for bounce and complaint processing.
  *
  * @package MailWizz Extension
  * @author Sendmux Team <contact@sendmux.ai>
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.1.0
+ * @version 0.2.0
  */
 
-class SendmuxCustomExtFrontendDswhController extends DswhController
+class SendmuxExtFrontendDswhController extends DswhController
 {
     /**
      * Webhook event types - Complaints
@@ -76,7 +76,7 @@ class SendmuxCustomExtFrontendDswhController extends DswhController
     }
 
     /**
-     * Process Sendmux Email Proxy API webhook events
+     * Process Sendmux webhook events
      *
      * @return void
      */

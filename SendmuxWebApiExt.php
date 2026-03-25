@@ -1,7 +1,7 @@
 <?php defined('MW_PATH') || exit('No direct script access allowed');
 
 /**
- * Sendmux Email Proxy API Extension
+ * Sendmux Sending API Extension
  *
  * Integrates MailWizz email marketing platform with Sendmux's email delivery service,
  * providing automatic bounce and complaint handling through webhooks.
@@ -11,19 +11,19 @@
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.1.0
+ * @version 0.2.0
  */
 
 class SendmuxWebApiExt extends ExtensionInit
 {
     // name of the extension as shown in the backend panel
-    public $name = 'Sendmux Email Proxy API';
+    public $name = 'Sendmux Sending API';
 
     // description of the extension as shown in backend panel
-    public $description = 'Integrates MailWizz with Sendmux Email Proxy API for reliable email delivery with automatic bounce and complaint handling via webhooks.';
+    public $description = 'Send emails via the Sendmux Sending API — high-deliverability email delivery for just a few cents per 1,000 emails. Includes automatic bounce and complaint handling via webhooks. Visit sendmux.ai for full pricing details.';
 
     // current version of this extension
-    public $version = '0.1.0';
+    public $version = '0.2.0';
 
     // minimum app version
     public $minAppVersion = '2.0.0';
@@ -117,7 +117,7 @@ class SendmuxWebApiExt extends ExtensionInit
 
             $this->addControllerMap([
                 'dswh' => array(
-                    'class'     => 'frontend.controllers.SendmuxCustomExtFrontendDswhController',
+                    'class'     => 'frontend.controllers.SendmuxExtFrontendDswhController',
                     'extension' => $this,
                 )
             ]);
