@@ -20,7 +20,7 @@ class SendmuxWebApiExt extends ExtensionInit
     public $name = 'Sendmux Sending API';
 
     // description of the extension as shown in backend panel
-    public $description = 'Send emails via the Sendmux Sending API — high-deliverability email delivery for just a few cents per 1,000 emails. Includes automatic bounce and complaint handling via webhooks. Visit sendmux.ai for full pricing details.';
+    public $description = 'Send emails via the Sendmux Sending API with automatic bounce and complaint handling. Visit sendmux.ai for details.';
 
     // current version of this extension
     public $version = '0.2.0';

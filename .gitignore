@@ -13,6 +13,7 @@ Thumbs.db
 .claude/
 .bg-shell/
 .gsd/
+CLAUDE.md
 
 # PHP
 vendor/

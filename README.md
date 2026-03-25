@@ -111,7 +111,7 @@ Navigate to your team's **Billing** page via the sidebar navigation. Top up your
 - Copy the generated API key (starts with `smx_`) — you'll need it for MailWizz
 
 ### 5. Install Extension in MailWizz
-- [Download the extension](https://github.com/Sendmux/mailwizz-smtp-proxy/archive/refs/heads/main.zip) zip file to your computer
+- [Download the latest release](https://github.com/Sendmux/mailwizz-smtp-proxy/releases/latest/download/sendmux-web-api.zip) zip file to your computer
 - In MailWizz, go to **/backend → Extend → Extensions → Upload Extension**
 - Upload the zip file and click **Enable**
 

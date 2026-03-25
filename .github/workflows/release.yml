@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release zip
+        run: |
+          mkdir sendmux-web-api
+          cp -r SendmuxWebApiExt.php composer.json LICENSE README.md CHANGELOG.md sendmux-web-api/
+          cp -r backend common customer frontend sendmux-web-api/
+          zip -r sendmux-web-api.zip sendmux-web-api/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sendmux-web-api.zip
+          generate_release_notes: true
