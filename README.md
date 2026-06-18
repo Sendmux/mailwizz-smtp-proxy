@@ -21,7 +21,7 @@
 
 Connect [MailWizz](https://www.mailwizz.com/) to [Sendmux](https://sendmux.ai) HTTP/SMTP Email Proxy — route emails through multiple SMTP providers with smart rate limiting, automatic failover, and bounce/complaint handling via webhooks.
 
-📖 [Sendmux](https://sendmux.ai) | 📚 [Documentation](https://docs.sendmux.ai) | 📧 [Contact Support](mailto:contact@sendmux.ai)
+📖 [Sendmux](https://sendmux.ai) | 📚 [Documentation](https://sendmux.ai/docs) | 📧 [Contact Support](mailto:contact@sendmux.ai)
 
 ---
 
@@ -176,11 +176,11 @@ Same authentication works for both methods.
 
 Sendmux provides comprehensive APIs for both sending and managing your email infrastructure:
 
-**[Sending API](https://docs.sendmux.ai/sending-api/introduction)** — send emails programmatically (this extension uses the Sending API under the hood):
+**[Sending API](https://sendmux.ai/docs/sending-api/introduction)** — send emails programmatically (this extension uses the Sending API under the hood):
 - Send individual emails
 - Send batch emails (up to multiple recipients in a single API call)
 
-**[Management API](https://docs.sendmux.ai/api-reference/introduction)** — full control over your Sendmux account:
+**[Management API](https://sendmux.ai/docs/api/introduction)** — full control over your Sendmux account:
 - Manage providers and provider settings
 - View account balance and billing
 - Access email delivery metrics and logs
@@ -220,4 +220,4 @@ Sendmux Sending Keys start with `smx_`. To create one: go to the Sendmux dashboa
 
 ---
 
-[Get Started](https://sendmux.ai) | [Documentation](https://docs.sendmux.ai) | [Contact Support](mailto:contact@sendmux.ai)
+[Get Started](https://sendmux.ai) | [Documentation](https://sendmux.ai/docs) | [Contact Support](mailto:contact@sendmux.ai)
