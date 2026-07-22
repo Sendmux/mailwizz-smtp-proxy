@@ -12,7 +12,7 @@ Yii::import('frontend.controllers.DswhController');
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 class SendmuxExtFrontendDswhController extends DswhController
@@ -22,6 +22,7 @@ class SendmuxExtFrontendDswhController extends DswhController
      */
     const EVENT_ABUSE_REPORT = 'incoming-report.abuse-report';
     const EVENT_FRAUD_REPORT = 'incoming-report.fraud-report';
+    const EVENT_MESSAGE_COMPLAINED = 'message.complained';
 
     /**
      * Webhook event types - Bounces
@@ -29,6 +30,7 @@ class SendmuxExtFrontendDswhController extends DswhController
     const EVENT_DSN_PERM_FAIL = 'delivery.dsn-perm-fail';
     const EVENT_DSN_TEMP_FAIL = 'delivery.dsn-temp-fail';
     const EVENT_DELIVERY_FAILED = 'delivery.failed';
+    const EVENT_MESSAGE_BOUNCED = 'message.bounced';
 
     /**
      * The extension instance
@@ -51,6 +53,17 @@ class SendmuxExtFrontendDswhController extends DswhController
             return;
         }
 
+        if ($server->type === 'sendmux-web-api') {
+            $types = DeliveryServer::getTypesMapping();
+            $modelClass = $types[$server->type] ?? null;
+            $server = $modelClass ? DeliveryServer::model($modelClass)->findByPk((int)$id) : null;
+
+            if (empty($server)) {
+                app()->end();
+                return;
+            }
+        }
+
         $map = [
             'amazon-ses-web-api'   => [$this, 'processAmazonSes'],
             'mailgun-web-api'      => [$this, 'processMailgun'],
@@ -69,6 +82,16 @@ class SendmuxExtFrontendDswhController extends DswhController
         $map = (array)hooks()->applyFilters('dswh_process_map', $map, $server, $this);
 
         if (isset($map[$server->type]) && is_callable($map[$server->type])) {
+            hooks()->doAction('dswh_before_process', new CAttributeCollection([
+                'processor' => $server->type,
+            ]));
+
+            app()->getEventHandlers('onEndRequest')->insertAt(0, function () use ($server) {
+                hooks()->doAction('dswh_after_process', new CAttributeCollection([
+                    'processor' => $server->type,
+                ]));
+            });
+
             call_user_func_array($map[$server->type], [$server, $this]);
         }
 
@@ -78,15 +101,25 @@ class SendmuxExtFrontendDswhController extends DswhController
     /**
      * Process Sendmux webhook events
      *
+     * @param DeliveryServer $server
      * @return void
      */
-    public function processSendmuxWebApi(): void
+    public function processSendmuxWebApi($server): void
     {
-        // Read raw JSON payload from request body
-        $rawBody = file_get_contents('php://input');
+        // Read the exact raw JSON payload once through MailWizz's request object.
+        $rawBody = (string)request()->getRawBody();
 
         if (empty($rawBody)) {
             Yii::log('Sendmux webhook received empty request body', 'error', 'sendmux.webhook');
+            app()->end();
+            return;
+        }
+
+        $signature = (string)request()->getServer('HTTP_X_SENDMUX_SIGNATURE', '');
+        $webhookSecret = (string)$server->username;
+        if (!SendmuxWebhookSignatureVerifier::verify($rawBody, $signature, $webhookSecret)) {
+            Yii::log('Sendmux webhook signature verification failed', 'warning', 'sendmux.webhook');
+            (new Response())->setStatusCode(401)->send();
             app()->end();
             return;
         }
@@ -95,7 +128,7 @@ class SendmuxExtFrontendDswhController extends DswhController
         $payload = json_decode($rawBody, true);
 
         if (!$payload) {
-            Yii::log('Sendmux webhook failed to parse JSON: ' . $rawBody, 'error', 'sendmux.webhook');
+            Yii::log('Sendmux webhook failed to parse JSON', 'error', 'sendmux.webhook');
             app()->end();
             return;
         }
@@ -141,13 +174,13 @@ class SendmuxExtFrontendDswhController extends DswhController
         $eventType = $event['type'];
         $eventData = $event['data'];
 
-        // Extract return_path from data.from field
-        if (!isset($eventData['from'])) {
-            Yii::log('Sendmux webhook event missing from field: ' . json_encode($event), 'error', 'sendmux.webhook');
+        // Current events expose the envelope sender as data.sender. Keep the
+        // legacy data.from fallback for existing installations.
+        $returnPath = $eventData['sender'] ?? $eventData['from'] ?? null;
+        if (!is_string($returnPath) || $returnPath === '') {
+            Yii::log('Sendmux webhook event missing sender field', 'error', 'sendmux.webhook');
             return;
         }
-
-        $returnPath = $eventData['from'];
 
         // Parse return_path format
         // Campaign emails: bounce+{campaignUid}+{subscriberUid}@domain.com
@@ -194,22 +227,23 @@ class SendmuxExtFrontendDswhController extends DswhController
             return;
         }
 
-        // Check for duplicate events - same as SendGrid/Mailgun approach
-        // Check by campaign_id + subscriber_id to prevent duplicate processing
-        $existingBounce = CampaignBounceLog::model()->countByAttributes([
-            'campaign_id'   => (int)$campaign->campaign_id,
-            'subscriber_id' => (int)$subscriber->subscriber_id,
-        ]);
-
-        if (!empty($existingBounce)) {
-            // Duplicate event - ignore to prevent reprocessing
-            Yii::log('Sendmux webhook duplicate event ignored for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'info', 'sendmux.webhook');
-            return;
-        }
-
         // Determine if this is a complaint or bounce event
         $isComplaint = $this->isComplaintEvent($eventType);
-        $bounceType = $this->getBounceType($eventType);
+        $bounceType = $this->getBounceType($eventType, $eventData);
+
+        if (!$isComplaint && $bounceType !== null) {
+            // Match MailWizz's provider handlers: deduplicate bounce logs, but
+            // never let an earlier bounce suppress a later complaint.
+            $existingBounce = CampaignBounceLog::model()->countByAttributes([
+                'campaign_id'   => (int)$campaign->campaign_id,
+                'subscriber_id' => (int)$subscriber->subscriber_id,
+            ]);
+
+            if (!empty($existingBounce)) {
+                Yii::log('Sendmux webhook duplicate bounce ignored for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'info', 'sendmux.webhook');
+                return;
+            }
+        }
 
         // Extract error/failure message
         $errorMessage = $this->extractErrorMessage($eventType, $eventData);
@@ -253,6 +287,7 @@ class SendmuxExtFrontendDswhController extends DswhController
         $complaintEvents = [
             self::EVENT_ABUSE_REPORT,
             self::EVENT_FRAUD_REPORT,
+            self::EVENT_MESSAGE_COMPLAINED,
         ];
 
         return in_array($eventType, $complaintEvents);
@@ -262,10 +297,21 @@ class SendmuxExtFrontendDswhController extends DswhController
      * Get bounce type based on event type
      *
      * @param string $eventType
+     * @param array $eventData
      * @return string|null
      */
-    protected function getBounceType(string $eventType): ?string
+    protected function getBounceType(string $eventType, array $eventData = []): ?string
     {
+        if ($eventType === self::EVENT_MESSAGE_BOUNCED) {
+            $bounceTypes = [
+                'Permanent'   => CampaignBounceLog::BOUNCE_HARD,
+                'Transient'   => CampaignBounceLog::BOUNCE_SOFT,
+                'Undetermined' => CampaignBounceLog::BOUNCE_INTERNAL,
+            ];
+
+            return $bounceTypes[$eventData['bounce_type'] ?? ''] ?? CampaignBounceLog::BOUNCE_INTERNAL;
+        }
+
         $bounceMapping = [
             self::EVENT_DSN_PERM_FAIL    => CampaignBounceLog::BOUNCE_HARD,
             self::EVENT_DSN_TEMP_FAIL    => CampaignBounceLog::BOUNCE_SOFT,
@@ -284,6 +330,24 @@ class SendmuxExtFrontendDswhController extends DswhController
      */
     protected function extractErrorMessage(string $eventType, array $eventData): string
     {
+        if ($eventType === self::EVENT_MESSAGE_BOUNCED) {
+            $parts = array_filter([
+                $eventData['bounce_type'] ?? null,
+                $eventData['bounce_subtype'] ?? null,
+            ], 'is_string');
+
+            return !empty($parts) ? 'Bounce: ' . implode(' - ', $parts) : 'Bounce received';
+        }
+
+        if ($eventType === self::EVENT_MESSAGE_COMPLAINED) {
+            $parts = array_filter([
+                $eventData['complaint_type'] ?? null,
+                $eventData['complaint_subtype'] ?? null,
+            ], 'is_string');
+
+            return !empty($parts) ? 'Complaint: ' . implode(' - ', $parts) : 'Complaint received';
+        }
+
         // For delivery.failed events, use 'reason' field
         if ($eventType === self::EVENT_DELIVERY_FAILED && isset($eventData['reason'])) {
             return $eventData['reason'];

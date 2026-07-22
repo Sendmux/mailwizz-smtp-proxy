@@ -13,7 +13,7 @@ if (!defined('MW_PATH')) {
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 /** @var Controller $controller */
@@ -132,15 +132,14 @@ if ($viewCollection->itemAt('renderContent')) {
                         <h4 class="modal-title"><?php echo IconHelper::make('info') . t('app', 'Info'); ?></h4>
                     </div>
                     <div class="modal-body">
-                        <?php echo t('servers', 'The url where this server expects to receive webhooks requests to process bounces and complaints is: {url}', ['{url}' => sprintf('<strong>%s</strong>', $server->getDswhUrl())]); ?><br /><br />
-	                    <?php echo t('servers', 'Please manually configure this webhook URL in your Sendmux dashboard under webhook settings.'); ?><br /><br />
-                        <strong><?php echo t('servers', 'How to get your Sendmux Sending Key:'); ?></strong><br />
+                        <strong><?php echo t('servers', 'Connect Sendmux:'); ?></strong><br />
                         <?php echo t('servers', '1. Log in to your Sendmux dashboard at {url}', ['{url}' => '<a href="https://app.sendmux.ai" target="_blank">app.sendmux.ai</a>']); ?><br />
-                        <?php echo t('servers', '2. Click "API Keys" in the sidebar menu'); ?><br />
-                        <?php echo t('servers', '3. Click "Create API Key" and select "Sending Key"'); ?><br />
-                        <?php echo t('servers', '4. Give it a name, choose your provider scope (all active providers, specific providers, or delivery groups), and click "Create Key"'); ?><br />
-                        <?php echo t('servers', '5. Copy the generated key (starts with smx_) and paste it into the API Key field above'); ?><br /><br />
-                        <?php echo t('servers', 'Sending via Sendmux costs just a few cents per 1,000 emails. Visit {url} for full pricing.', ['{url}' => '<a href="https://sendmux.ai" target="_blank">sendmux.ai</a>']); ?>
+                        <?php echo t('servers', '2. Under "API Keys", create a send-capable mailbox key. Paste the reveal-once smx_mbx_ value into Sending Key.'); ?><br />
+                        <?php echo t('servers', '3. Save this delivery server once. It remains inactive while you connect signed feedback.'); ?><br />
+                        <?php echo t('servers', '4. Under "Webhooks", create a webhook using this endpoint: {url}', ['{url}' => sprintf('<strong>%s</strong>', $server->getDswhUrl())]); ?><br />
+                        <?php echo t('servers', '5. Subscribe to message.bounced and message.complained, then copy the reveal-once whsec_ signing secret.'); ?><br />
+                        <?php echo t('servers', '6. Edit this server, paste that value into Webhook signing secret, save, test and activate the server.'); ?><br /><br />
+                        <?php echo t('servers', 'Leave Webhook signing secret blank on later edits to keep the saved secret.'); ?>
                     </div>
 
                 </div>
