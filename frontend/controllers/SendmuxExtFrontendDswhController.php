@@ -215,22 +215,37 @@ class SendmuxExtFrontendDswhController extends DswhController
             return;
         }
 
+        // Determine if this is a complaint or bounce event before subscriber lookup.
+        $isComplaint = $this->isComplaintEvent($eventType);
+        $bounceType = $this->getBounceType($eventType, $eventData);
+        $errorMessage = $this->extractErrorMessage($eventType, $eventData);
+
         // Look up subscriber
-        $subscriber = ListSubscriber::model()->findByAttributes([
+        $subscriberAttributes = [
             'list_id'        => $campaign->list_id,
             'subscriber_uid' => $subscriberUid,
-            'status'         => ListSubscriber::STATUS_CONFIRMED,
-        ]);
+        ];
+        if (!$isComplaint) {
+            $subscriberAttributes['status'] = ListSubscriber::STATUS_CONFIRMED;
+        }
+        $subscriber = ListSubscriber::model()->findByAttributes($subscriberAttributes);
 
         if (empty($subscriber)) {
             Yii::log('Sendmux webhook subscriber not found: ' . $subscriberUid . ' for campaign: ' . $campaignUid, 'warning', 'sendmux.webhook');
             return;
         }
 
-        // Determine if this is a complaint or bounce event
-        $isComplaint = $this->isComplaintEvent($eventType);
-        $bounceType = $this->getBounceType($eventType, $eventData);
-        $errorMessage = $this->extractErrorMessage($eventType, $eventData);
+        if ($isComplaint) {
+            $existingComplaint = CampaignComplainLog::model()->countByAttributes([
+                'campaign_id'   => (int)$campaign->campaign_id,
+                'subscriber_id' => (int)$subscriber->subscriber_id,
+            ]);
+
+            if (!empty($existingComplaint)) {
+                Yii::log('Sendmux webhook duplicate complaint ignored for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'info', 'sendmux.webhook');
+                return;
+            }
+        }
 
         if (!$isComplaint && $bounceType !== null) {
             // Deduplicate repeat feedback while retaining the strongest bounce classification.
@@ -246,12 +261,23 @@ class SendmuxExtFrontendDswhController extends DswhController
                     CampaignBounceLog::BOUNCE_HARD     => 3,
                 ];
 
-                if ($severity[$bounceType] > $severity[$existingBounce->bounce_type]) {
-                    $existingBounce->message     = $errorMessage;
-                    $existingBounce->bounce_type = $bounceType;
-                    $existingBounce->save();
+                $candidateBounce = new CampaignBounceLog();
+                $candidateBounce->message     = $errorMessage;
+                $candidateBounce->bounce_type = $bounceType;
+                if ($candidateBounce->looksLikeInternalBounce()) {
+                    $candidateBounce->bounce_type = CampaignBounceLog::BOUNCE_INTERNAL;
+                }
 
-                    if ($bounceType === CampaignBounceLog::BOUNCE_HARD) {
+                if ($severity[$candidateBounce->bounce_type] > $severity[$existingBounce->bounce_type]) {
+                    $existingBounce->message     = $candidateBounce->message;
+                    $existingBounce->bounce_type = $candidateBounce->bounce_type;
+
+                    if (!$existingBounce->save()) {
+                        Yii::log('Sendmux webhook bounce upgrade failed for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'warning', 'sendmux.webhook');
+                        return;
+                    }
+
+                    if ($existingBounce->bounce_type === CampaignBounceLog::BOUNCE_HARD) {
                         $subscriber->addToBlacklist($existingBounce->message);
                     }
 
@@ -266,12 +292,13 @@ class SendmuxExtFrontendDswhController extends DswhController
 
         // Process complaints
         if ($isComplaint) {
+            // Blacklist before MailWizz's default feedback action can change
+            // a confirmed subscriber to unsubscribed.
+            $subscriber->addToBlacklist($errorMessage);
+
             /** @var OptionCronProcessFeedbackLoopServers $fbl */
             $fbl = container()->get(OptionCronProcessFeedbackLoopServers::class);
             $fbl->takeActionAgainstSubscriberWithCampaign($subscriber, $campaign);
-
-            // Blacklist subscriber - store error message directly without prefix
-            $subscriber->addToBlacklist($errorMessage);
 
             return;
         }
@@ -283,10 +310,13 @@ class SendmuxExtFrontendDswhController extends DswhController
             $bounceLog->subscriber_id = (int)$subscriber->subscriber_id;
             $bounceLog->message       = $errorMessage;
             $bounceLog->bounce_type   = $bounceType;
-            $bounceLog->save();
+            if (!$bounceLog->save()) {
+                Yii::log('Sendmux webhook bounce save failed for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'warning', 'sendmux.webhook');
+                return;
+            }
 
             // Blacklist on hard bounces only
-            if ($bounceType === CampaignBounceLog::BOUNCE_HARD) {
+            if ($bounceLog->bounce_type === CampaignBounceLog::BOUNCE_HARD) {
                 $subscriber->addToBlacklist($bounceLog->message);
             }
         }

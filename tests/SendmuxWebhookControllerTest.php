@@ -17,7 +17,9 @@ final class SendmuxWebhookControllerTest extends TestCase
         Campaign::$found = null;
         ListSubscriber::$found = null;
         CampaignBounceLog::$found = null;
+        CampaignBounceLog::$saveResult = true;
         CampaignBounceLog::$saved = [];
+        CampaignComplainLog::$count = 0;
         FakeRequest::$rawBody = '';
         FakeRequest::$server = [];
         Yii::$logs = [];
@@ -123,46 +125,32 @@ final class SendmuxWebhookControllerTest extends TestCase
     public function testSignedComplaintIsProcessedAfterAnEarlierBounce(): void
     {
         $secret = 'whsec_controller-test';
-        $body = json_encode([
-            'id' => 'evt_current_complaint',
-            'type' => 'message.complained',
-            'team_public_id' => 'team_test',
-            'occurred_at' => '2026-07-22T10:05:00.000Z',
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+
+        $this->sendSignedPayload([
+            'id' => 'evt_hard_before_complaint',
+            'type' => 'message.bounced',
             'data' => [
                 'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
-                'recipients' => ['prospect@example.net'],
-                'complaint_type' => 'abuse',
-                'complaint_subtype' => null,
+                'bounce_type' => 'Permanent',
+                'bounce_subtype' => 'General',
             ],
-        ], JSON_UNESCAPED_SLASHES);
+        ], $secret);
 
-        $server = new DeliveryServer();
-        $server->server_id = 7;
-        $server->type = 'sendmux-web-api';
-        $server->username = 'encrypted-at-rest';
-        DeliveryServer::$found = $server;
+        self::assertSame(ListSubscriber::STATUS_BLACKLISTED, $subscriber->status);
 
-        $typedServer = clone $server;
-        $typedServer->username = $secret;
-        DeliveryServer::$typedFound = $typedServer;
-
-        $campaign = new Campaign();
-        $campaign->campaign_id = 17;
-        $campaign->list_id = 27;
-        Campaign::$found = $campaign;
-
-        $subscriber = new ListSubscriber();
-        $subscriber->subscriber_id = 37;
-        ListSubscriber::$found = $subscriber;
-
-        CampaignBounceLog::$found = new CampaignBounceLog();
-        FakeRequest::$rawBody = $body;
-        FakeRequest::$server['HTTP_X_SENDMUX_SIGNATURE'] = 'sha256=' . hash_hmac('sha256', $body, $secret);
-
-        (new SendmuxExtFrontendDswhController())->actionIndex(7);
+        $this->sendSignedPayload([
+            'id' => 'evt_current_complaint',
+            'type' => 'message.complained',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'complaint_type' => 'abuse',
+            ],
+        ], $secret);
 
         self::assertCount(1, container()->feedbackLoop->actions);
         self::assertCount(1, $subscriber->blacklistMessages);
+        self::assertSame(ListSubscriber::STATUS_UNSUBSCRIBED, $subscriber->status);
     }
 
     /**
@@ -386,6 +374,113 @@ final class SendmuxWebhookControllerTest extends TestCase
         self::assertSame(CampaignBounceLog::BOUNCE_HARD, $existingBounce->bounce_type);
         self::assertSame('550 mailbox unavailable', $existingBounce->message);
         self::assertSame([], $subscriber->blacklistMessages);
+    }
+
+    public function testNormalisedInternalBounceCannotDowngradeAnEarlierSoftBounce(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+
+        $existingBounce = new CampaignBounceLog();
+        $existingBounce->campaign_id = 17;
+        $existingBounce->subscriber_id = 37;
+        $existingBounce->message = '451 mailbox temporarily unavailable';
+        $existingBounce->bounce_type = CampaignBounceLog::BOUNCE_SOFT;
+        CampaignBounceLog::$found = $existingBounce;
+
+        $this->sendSignedPayload([
+            'id' => 'evt_blocked_after_soft',
+            'type' => 'message.bounced',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'bounce_type' => 'Permanent',
+                'bounce_subtype' => 'Blocked',
+            ],
+        ], $secret);
+
+        self::assertSame([], CampaignBounceLog::$saved);
+        self::assertSame(CampaignBounceLog::BOUNCE_SOFT, $existingBounce->bounce_type);
+        self::assertSame('451 mailbox temporarily unavailable', $existingBounce->message);
+        self::assertSame([], $subscriber->blacklistMessages);
+    }
+
+    public function testNewHardBounceNormalisedToInternalDoesNotBlacklistSubscriber(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+
+        $this->sendSignedPayload([
+            'id' => 'evt_new_blocked_bounce',
+            'type' => 'message.bounced',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'bounce_type' => 'Permanent',
+                'bounce_subtype' => 'Blocked',
+            ],
+        ], $secret);
+
+        self::assertCount(1, CampaignBounceLog::$saved);
+        self::assertSame(CampaignBounceLog::BOUNCE_INTERNAL, CampaignBounceLog::$saved[0]->bounce_type);
+        self::assertSame([], $subscriber->blacklistMessages);
+    }
+
+    public function testFailedHardBounceSaveCannotBlacklistSubscriber(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+        CampaignBounceLog::$saveResult = false;
+
+        $this->sendSignedPayload([
+            'id' => 'evt_failed_hard_bounce_save',
+            'type' => 'message.bounced',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'bounce_type' => 'Permanent',
+                'bounce_subtype' => 'General',
+            ],
+        ], $secret);
+
+        self::assertSame([], CampaignBounceLog::$saved);
+        self::assertSame([], $subscriber->blacklistMessages);
+    }
+
+    public function testSignedComplaintBlacklistsBeforeDefaultFeedbackActionUnsubscribes(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+
+        $this->sendSignedPayload([
+            'id' => 'evt_default_complaint_action',
+            'type' => 'message.complained',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'complaint_type' => 'abuse',
+            ],
+        ], $secret);
+
+        self::assertSame(['Complaint: abuse'], $subscriber->blacklistMessages);
+        self::assertSame(ListSubscriber::STATUS_UNSUBSCRIBED, $subscriber->status);
+        self::assertCount(1, container()->feedbackLoop->actions);
+    }
+
+    public function testDuplicateSignedComplaintDoesNotRepeatStateChanges(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+        CampaignComplainLog::$count = 1;
+
+        $this->sendSignedPayload([
+            'id' => 'evt_duplicate_complaint',
+            'type' => 'message.complained',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'complaint_type' => 'abuse',
+            ],
+        ], $secret);
+
+        self::assertSame([], $subscriber->blacklistMessages);
+        self::assertSame(ListSubscriber::STATUS_CONFIRMED, $subscriber->status);
+        self::assertSame([], container()->feedbackLoop->actions);
     }
 
     private function arrangeMatchedCampaign(string $secret): ListSubscriber

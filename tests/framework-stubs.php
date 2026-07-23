@@ -336,10 +336,13 @@ class Campaign
 class ListSubscriber
 {
     public const STATUS_CONFIRMED = 'confirmed';
+    public const STATUS_UNSUBSCRIBED = 'unsubscribed';
+    public const STATUS_BLACKLISTED = 'blacklisted';
 
     public static ?ListSubscriber $found = null;
 
     public int $subscriber_id = 0;
+    public string $status = self::STATUS_CONFIRMED;
 
     /** @var string[] */
     public array $blacklistMessages = [];
@@ -351,12 +354,33 @@ class ListSubscriber
 
     public function findByAttributes(array $attributes): ?ListSubscriber
     {
+        if (self::$found !== null && isset($attributes['status']) && self::$found->status !== $attributes['status']) {
+            return null;
+        }
+
         return self::$found;
     }
 
-    public function addToBlacklist(string $message): void
+    public function addToBlacklist(string $message = ''): bool
     {
+        if (!$this->getIsConfirmed()) {
+            return false;
+        }
+
         $this->blacklistMessages[] = $message;
+        $this->status = self::STATUS_BLACKLISTED;
+
+        return true;
+    }
+
+    public function getIsConfirmed(): bool
+    {
+        return $this->status === self::STATUS_CONFIRMED;
+    }
+
+    public function getIsUnsubscribed(): bool
+    {
+        return $this->status === self::STATUS_UNSUBSCRIBED;
     }
 }
 
@@ -367,6 +391,7 @@ class CampaignBounceLog
     public const BOUNCE_INTERNAL = 'internal';
 
     public static ?CampaignBounceLog $found = null;
+    public static bool $saveResult = true;
 
     /** @var CampaignBounceLog[] */
     public static array $saved = [];
@@ -386,8 +411,22 @@ class CampaignBounceLog
         return self::$found;
     }
 
+    public function looksLikeInternalBounce(): bool
+    {
+        return $this->bounce_type === self::BOUNCE_INTERNAL
+            || preg_match('/unsolicited mail|(spam|block(ed)?)|(DNSBL|RBL|CDRBL|Blacklist)/i', $this->message) === 1;
+    }
+
     public function save(): bool
     {
+        if ($this->looksLikeInternalBounce()) {
+            $this->bounce_type = self::BOUNCE_INTERNAL;
+        }
+
+        if (!self::$saveResult) {
+            return false;
+        }
+
         self::$saved[] = clone $this;
 
         return true;
@@ -398,6 +437,21 @@ class OptionCronProcessFeedbackLoopServers
 {
 }
 
+class CampaignComplainLog
+{
+    public static int $count = 0;
+
+    public static function model(): CampaignComplainLog
+    {
+        return new self();
+    }
+
+    public function countByAttributes(array $attributes): int
+    {
+        return self::$count;
+    }
+}
+
 final class FakeFeedbackLoop
 {
     /** @var array<int, array{0: ListSubscriber, 1: Campaign}> */
@@ -405,7 +459,13 @@ final class FakeFeedbackLoop
 
     public function takeActionAgainstSubscriberWithCampaign(ListSubscriber $subscriber, Campaign $campaign): void
     {
+        if ($subscriber->getIsUnsubscribed()) {
+            return;
+        }
+
         $this->actions[] = [$subscriber, $campaign];
+        $subscriber->status = ListSubscriber::STATUS_UNSUBSCRIBED;
+        CampaignComplainLog::$count = 1;
     }
 }
 

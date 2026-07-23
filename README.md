@@ -26,7 +26,7 @@ Connect [MailWizz](https://www.mailwizz.com/) to [Sendmux](https://sendmux.ai) t
 
 - Sends MailWizz campaign and transactional messages through one Sendmux delivery server.
 - Preserves MailWizz campaign and subscriber identifiers in the return path so feedback can be correlated.
-- Adds a stable idempotency key so Sendmux can deduplicate matching campaign retries within its idempotency window.
+- Adds a stable idempotency key so Sendmux can deduplicate matching campaign retries within the same team and idempotency window when its deduplication store is available.
 - Verifies signed Sendmux webhooks before processing bounce or complaint data.
 - Records campaign bounces and applies MailWizz complaint handling to the matching subscriber.
 
@@ -99,7 +99,7 @@ A range changes the active throughput cap. It is not a random delay applied inde
 
 | Sendmux event | MailWizz action |
 |---|---|
-| `message.bounced` with `Permanent` | Records a hard bounce and blacklists the subscriber. |
+| `message.bounced` with `Permanent` | Records a hard bounce and blacklists the subscriber unless MailWizz classifies the diagnostic as an internal bounce. |
 | `message.bounced` with `Transient` | Records a soft bounce. |
 | `message.bounced` with `Undetermined` | Records an internal bounce. |
 | `message.complained` | Applies MailWizz feedback-loop handling and blacklists the subscriber. |
