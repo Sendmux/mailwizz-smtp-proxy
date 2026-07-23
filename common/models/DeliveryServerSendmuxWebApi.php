@@ -16,7 +16,7 @@ if (!defined('MW_PATH')) {
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 class DeliveryServerSendmuxWebApi extends DeliveryServer
@@ -38,6 +38,13 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public string $emailProxyUrl = self::EMAIL_PROXY_URL;
 
     /**
+     * Write-only form field backed by the encrypted username column.
+     *
+     * @var string
+     */
+    public string $webhook_secret = '';
+
+    /**
      * @var string
      */
     protected $serverType = 'sendmux-web-api';
@@ -48,6 +55,59 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     protected $_providerUrl = 'https://sendmux.ai/';
 
     /**
+     * Encrypt the webhook signing secret stored in the otherwise-unused
+     * delivery-server username field.
+     *
+     * @return array
+     */
+    public function behaviors()
+    {
+        return CMap::mergeArray([
+            'webhookSecretHandler' => [
+                'class'         => 'common.components.db.behaviors.RemoteServerPasswordHandlerBehavior',
+                'passwordField' => 'username',
+            ],
+        ], parent::behaviors());
+    }
+
+    /**
+     * @return bool
+     */
+    protected function beforeValidate()
+    {
+        if ($this->webhook_secret !== '') {
+            $webhookSecret = trim($this->webhook_secret);
+            if (!$this->getIsNewRecord() && !is_cli() && $this->username !== $webhookSecret) {
+                $this->status = self::STATUS_INACTIVE;
+            }
+            $this->username = $webhookSecret;
+        }
+
+        return parent::beforeValidate();
+    }
+
+    /**
+     * Prevent MailWizz's generic credential comparison from treating the
+     * encrypted stored username as a changed plaintext webhook secret.
+     *
+     * @return void
+     */
+    protected function afterValidate()
+    {
+        $webhookSecret = $this->username;
+
+        if (!$this->getIsNewRecord() && !is_cli()) {
+            $storedServer = DeliveryServer::model()->findByPk((int)$this->server_id);
+            if (!empty($storedServer)) {
+                $this->username = $storedServer->username;
+            }
+        }
+
+        parent::afterValidate();
+        $this->username = $webhookSecret;
+    }
+
+    /**
      * @return array
      */
     public function rules()
@@ -55,8 +115,43 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
         $rules = [
             ['password', 'required'],
             ['password', 'length', 'max' => 255],
+            ['password', '_validateSendingKey'],
+            ['webhook_secret', 'length', 'max' => 150],
+            ['webhook_secret', '_validateWebhookSecret'],
         ];
         return CMap::mergeArray($rules, parent::rules());
+    }
+
+    /**
+     * @param string $attribute
+     * @return void
+     */
+    public function _validateSendingKey($attribute): void
+    {
+        if (!preg_match('/\Asmx_mbx_[A-Za-z0-9]{32}\z/', (string)$this->password)) {
+            $this->addError($attribute, t('servers', 'Enter a send-capable Sendmux mailbox key (starts with smx_mbx_).'));
+        }
+    }
+
+    /**
+     * @param string $attribute
+     * @return void
+     */
+    public function _validateWebhookSecret($attribute): void
+    {
+        if ((string)$this->username === '') {
+            if ($this->getIsNewRecord()) {
+                $this->status = self::STATUS_INACTIVE;
+                return;
+            }
+
+            $this->addError($attribute, t('servers', 'Webhook signing secret is required.'));
+            return;
+        }
+
+        if (!preg_match('/\Awhsec_[A-Za-z0-9_-]+\z/', (string)$this->username)) {
+            $this->addError($attribute, t('servers', 'Enter the webhook signing secret shown by Sendmux (starts with whsec_).'));
+        }
     }
 
     /**
@@ -65,7 +160,8 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public function attributeLabels()
     {
         $labels = [
-            'password'   => t('servers', 'API Key'),
+            'password'       => t('servers', 'Sending Key'),
+            'webhook_secret' => t('servers', 'Webhook signing secret'),
         ];
         return CMap::mergeArray(parent::attributeLabels(), $labels);
     }
@@ -76,7 +172,8 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public function attributeHelpTexts()
     {
         $texts = [
-            'password' => t('servers', 'Your Sendmux Sending Key (starts with smx_). To create one: go to the Sendmux dashboard, click "API Keys" in the sidebar, click "Create API Key", select "Sending Key", give it a name, choose your provider scope, and click "Create Key".'),
+            'password'       => t('servers', 'Your send-capable Sendmux mailbox key (starts with smx_mbx_). Create it under API Keys in Sendmux.'),
+            'webhook_secret' => t('servers', 'The reveal-once signing secret shown when you create the Sendmux webhook (starts with whsec_). Leave blank when editing to keep the saved secret.'),
         ];
 
         return CMap::mergeArray(parent::attributeHelpTexts(), $texts);
@@ -88,7 +185,8 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
     public function attributePlaceholders()
     {
         $placeholders = [
-            'password'  => t('servers', 'smx_...'),
+            'password'       => t('servers', 'smx_mbx_...'),
+            'webhook_secret' => t('servers', 'whsec_...'),
         ];
 
         return CMap::mergeArray(parent::attributePlaceholders(), $placeholders);
@@ -250,12 +348,21 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
             // Create Bearer Auth header (Sendmux API key)
             $authHeader = 'Bearer ' . $this->password;
 
+            $requestHeaders = [
+                'Content-Type'  => 'application/json',
+                'Authorization' => $authHeader,
+            ];
+            if (!empty($params['campaignUid']) && !empty($params['subscriberUid'])) {
+                $logicalSendId = implode("\0", [
+                    (string)$params['campaignUid'],
+                    (string)$params['subscriberUid'],
+                ]);
+                $requestHeaders['Idempotency-Key'] = 'mailwizz-' . hash('sha256', $logicalSendId);
+            }
+
             // Send request to Sendmux API
             $response = (new GuzzleHttp\Client())->post($this->emailProxyUrl, [
-                'headers'   => [
-                    'Content-Type'  => 'application/json',
-                    'Authorization' => $authHeader,
-                ],
+                'headers'   => $requestHeaders,
                 'timeout'   => (int)$this->timeout,
                 'json'      => $postData,
             ]);
@@ -327,6 +434,10 @@ class DeliveryServerSendmuxWebApi extends DeliveryServer
         $form = new CActiveForm();
         return parent::getFormFieldsDefinition(CMap::mergeArray([
             'username'                => null,
+            'webhook_secret'          => [
+                'visible'   => true,
+                'fieldHtml' => $form->passwordField($this, 'webhook_secret', $this->fieldDecorator->getHtmlOptions('webhook_secret')),
+            ],
             'hostname'                => null,
             'port'                    => null,
             'protocol'                => null,

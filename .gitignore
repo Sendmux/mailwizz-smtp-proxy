@@ -18,6 +18,7 @@ CLAUDE.md
 # PHP
 vendor/
 composer.lock
+.phpunit.result.cache
 
 # Env
 .env

@@ -11,7 +11,7 @@
  * @link https://sendmux.ai
  * @copyright 2026 Sendmux
  * @license FSL-2.0 (Functional Source License 2.0)
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 class SendmuxWebApiExt extends ExtensionInit
@@ -23,10 +23,10 @@ class SendmuxWebApiExt extends ExtensionInit
     public $description = 'Send emails via the Sendmux Sending API with automatic bounce and complaint handling. Visit sendmux.ai for details.';
 
     // current version of this extension
-    public $version = '0.2.0';
+    public $version = '0.3.0';
 
     // minimum app version
-    public $minAppVersion = '2.0.0';
+    public $minAppVersion = '2.0.34';
 
     // the author name
     public $author = 'Sendmux Team';
@@ -73,6 +73,7 @@ class SendmuxWebApiExt extends ExtensionInit
     public function run()
     {
         $this->importClasses('common.models.*');
+        $this->importClasses('common.components.*');
 
         // add delivery server type
         hooks()->addFilter('delivery_servers_get_types_mapping', function ($mapping) {
