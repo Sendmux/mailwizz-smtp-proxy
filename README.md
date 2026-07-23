@@ -27,7 +27,7 @@ Connect [MailWizz](https://www.mailwizz.com/) to [Sendmux](https://sendmux.ai) t
 - Sends MailWizz campaign and transactional messages through one Sendmux delivery server.
 - Preserves MailWizz campaign and subscriber identifiers in the return path so feedback can be correlated.
 - Adds a stable idempotency key so Sendmux can deduplicate matching campaign retries within the same team and idempotency window when its deduplication store is available.
-- Verifies signed Sendmux webhooks before processing bounce or complaint data.
+- Verifies signed Sendmux webhooks and matches feedback to the MailWizz delivery server that sent the campaign message.
 - Records campaign bounces and applies MailWizz complaint handling to the matching subscriber.
 
 An API response with `queued` status means Sendmux accepted the message for processing. It does not guarantee final delivery or inbox placement.
@@ -104,7 +104,7 @@ A range changes the active throughput cap. It is not a random delay applied inde
 | `message.bounced` with `Undetermined` | Records an internal bounce. |
 | `message.complained` | Applies MailWizz feedback-loop handling and blacklists the subscriber. |
 
-The extension verifies `X-Sendmux-Signature` against the exact request body before reading the event. For the same campaign and subscriber, a stronger bounce classification replaces an earlier one; matching or weaker duplicates are ignored. Feedback without MailWizz campaign and subscriber identifiers cannot be applied to a campaign record.
+The extension verifies `X-Sendmux-Signature` against the exact request body before reading the event. Feedback is applied only when the campaign, subscriber and webhook delivery server match a current or archived MailWizz delivery record. For the same campaign and subscriber, a stronger bounce classification replaces an earlier one; matching or weaker duplicates are ignored. Feedback without MailWizz campaign and subscriber identifiers cannot be applied to a campaign record.
 
 ## Sendmux developer tools and email inboxes for AI agents
 
