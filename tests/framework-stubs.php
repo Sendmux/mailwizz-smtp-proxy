@@ -366,7 +366,7 @@ class CampaignBounceLog
     public const BOUNCE_SOFT = 'soft';
     public const BOUNCE_INTERNAL = 'internal';
 
-    public static int $count = 0;
+    public static ?CampaignBounceLog $found = null;
 
     /** @var CampaignBounceLog[] */
     public static array $saved = [];
@@ -381,9 +381,9 @@ class CampaignBounceLog
         return new self();
     }
 
-    public function countByAttributes(array $attributes): int
+    public function findByAttributes(array $attributes): ?CampaignBounceLog
     {
-        return self::$count;
+        return self::$found;
     }
 
     public function save(): bool

@@ -104,7 +104,16 @@ A range changes the active throughput cap. It is not a random delay applied inde
 | `message.bounced` with `Undetermined` | Records an internal bounce. |
 | `message.complained` | Applies MailWizz feedback-loop handling and blacklists the subscriber. |
 
-The extension verifies `X-Sendmux-Signature` against the exact request body before reading the event. Duplicate bounce feedback for the same campaign and subscriber is ignored. Feedback without MailWizz campaign and subscriber identifiers cannot be applied to a campaign record.
+The extension verifies `X-Sendmux-Signature` against the exact request body before reading the event. For the same campaign and subscriber, a stronger bounce classification replaces an earlier one; matching or weaker duplicates are ignored. Feedback without MailWizz campaign and subscriber identifiers cannot be applied to a campaign record.
+
+## Sendmux developer tools and email inboxes for AI agents
+
+The MailWizz extension is one way to use Sendmux. Developers and AI agents can also use these available tools:
+
+- **[Email Inbox API for AI Agents](https://sendmux.ai/product/inboxes/)** — give agents mailboxes to receive, search, organise and reply to email. See the [mailbox guide](https://sendmux.ai/docs/guides/mailboxes).
+- **[Sendmux MCP](https://sendmux.ai/docs/guides/mcp)** — connect AI clients to authorised Management, Mailbox and Sending tools through hosted MCP at `https://mcp.sendmux.ai/mcp` or the [`sendmux-mcp` package](https://pypi.org/project/sendmux-mcp/).
+- **[Sendmux CLI](https://sendmux.ai/docs/cli)** — manage sending accounts, mailboxes and email workflows from the terminal with [`@sendmux/cli`](https://www.npmjs.com/package/@sendmux/cli) or [Snap](https://snapcraft.io/sendmux).
+- **[Sendmux SDKs](https://sendmux.ai/docs/sdks)** — add package-managed clients for the Sending, Mailbox and Management APIs. Browse the [official SDK, CLI and MCP source](https://github.com/Sendmux/sendmux-sdk).
 
 ## Frequently asked questions
 
@@ -115,6 +124,10 @@ Not for campaign feedback handled by this integration. The signed webhook writes
 ### Can Sendmux use multiple sending accounts?
 
 Yes. Add the accounts to Sendmux and configure their individual sender details and limits. Sendmux chooses among eligible active accounts according to your routing configuration.
+
+### Can I reuse the same autoresponder for a repeated send?
+
+Use a separate MailWizz campaign for each intended follow-up. The retry key identifies one logical send by campaign and subscriber, so deliberately re-entering the same subscriber into the same autoresponder during Sendmux's idempotency window is unsupported.
 
 ### Why is my new or edited delivery server inactive?
 

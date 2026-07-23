@@ -230,23 +230,39 @@ class SendmuxExtFrontendDswhController extends DswhController
         // Determine if this is a complaint or bounce event
         $isComplaint = $this->isComplaintEvent($eventType);
         $bounceType = $this->getBounceType($eventType, $eventData);
+        $errorMessage = $this->extractErrorMessage($eventType, $eventData);
 
         if (!$isComplaint && $bounceType !== null) {
-            // Match MailWizz's provider handlers: deduplicate bounce logs, but
-            // never let an earlier bounce suppress a later complaint.
-            $existingBounce = CampaignBounceLog::model()->countByAttributes([
+            // Deduplicate repeat feedback while retaining the strongest bounce classification.
+            $existingBounce = CampaignBounceLog::model()->findByAttributes([
                 'campaign_id'   => (int)$campaign->campaign_id,
                 'subscriber_id' => (int)$subscriber->subscriber_id,
             ]);
 
             if (!empty($existingBounce)) {
+                $severity = [
+                    CampaignBounceLog::BOUNCE_INTERNAL => 1,
+                    CampaignBounceLog::BOUNCE_SOFT     => 2,
+                    CampaignBounceLog::BOUNCE_HARD     => 3,
+                ];
+
+                if ($severity[$bounceType] > $severity[$existingBounce->bounce_type]) {
+                    $existingBounce->message     = $errorMessage;
+                    $existingBounce->bounce_type = $bounceType;
+                    $existingBounce->save();
+
+                    if ($bounceType === CampaignBounceLog::BOUNCE_HARD) {
+                        $subscriber->addToBlacklist($existingBounce->message);
+                    }
+
+                    Yii::log('Sendmux webhook bounce upgraded for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'info', 'sendmux.webhook');
+                    return;
+                }
+
                 Yii::log('Sendmux webhook duplicate bounce ignored for campaign: ' . $campaignUid . ', subscriber: ' . $subscriberUid, 'info', 'sendmux.webhook');
                 return;
             }
         }
-
-        // Extract error/failure message
-        $errorMessage = $this->extractErrorMessage($eventType, $eventData);
 
         // Process complaints
         if ($isComplaint) {

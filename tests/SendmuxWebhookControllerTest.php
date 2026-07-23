@@ -16,7 +16,7 @@ final class SendmuxWebhookControllerTest extends TestCase
         DeliveryServer::$typedFound = null;
         Campaign::$found = null;
         ListSubscriber::$found = null;
-        CampaignBounceLog::$count = 0;
+        CampaignBounceLog::$found = null;
         CampaignBounceLog::$saved = [];
         FakeRequest::$rawBody = '';
         FakeRequest::$server = [];
@@ -69,7 +69,9 @@ final class SendmuxWebhookControllerTest extends TestCase
 
         self::assertCount(1, CampaignBounceLog::$saved);
         self::assertSame(CampaignBounceLog::BOUNCE_HARD, CampaignBounceLog::$saved[0]->bounce_type);
+        self::assertSame('Bounce: Permanent - General', CampaignBounceLog::$saved[0]->message);
         self::assertCount(1, $subscriber->blacklistMessages);
+        self::assertSame('Bounce: Permanent - General', $subscriber->blacklistMessages[0]);
         self::assertContains('dswh_before_process', array_column(hooks()->actions, 'name'));
         self::assertCount(1, app()->endRequestHandlers->handlers);
     }
@@ -153,7 +155,7 @@ final class SendmuxWebhookControllerTest extends TestCase
         $subscriber->subscriber_id = 37;
         ListSubscriber::$found = $subscriber;
 
-        CampaignBounceLog::$count = 1;
+        CampaignBounceLog::$found = new CampaignBounceLog();
         FakeRequest::$rawBody = $body;
         FakeRequest::$server['HTTP_X_SENDMUX_SIGNATURE'] = 'sha256=' . hash_hmac('sha256', $body, $secret);
 
@@ -311,7 +313,9 @@ final class SendmuxWebhookControllerTest extends TestCase
     {
         $secret = 'whsec_controller-test';
         $subscriber = $this->arrangeMatchedCampaign($secret);
-        CampaignBounceLog::$count = 1;
+        $existingBounce = new CampaignBounceLog();
+        $existingBounce->bounce_type = CampaignBounceLog::BOUNCE_HARD;
+        CampaignBounceLog::$found = $existingBounce;
 
         $this->sendSignedPayload([
             'id' => 'evt_duplicate_bounce',
@@ -325,6 +329,63 @@ final class SendmuxWebhookControllerTest extends TestCase
         self::assertSame([], CampaignBounceLog::$saved);
         self::assertSame([], $subscriber->blacklistMessages);
         self::assertStringContainsString('duplicate bounce ignored', implode('\n', array_column(Yii::$logs, 'message')));
+    }
+
+    public function testSignedHardBounceUpgradesAnEarlierSoftBounceAndBlacklistsSubscriber(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+
+        $existingBounce = new CampaignBounceLog();
+        $existingBounce->campaign_id = 17;
+        $existingBounce->subscriber_id = 37;
+        $existingBounce->message = '451 mailbox temporarily unavailable';
+        $existingBounce->bounce_type = CampaignBounceLog::BOUNCE_SOFT;
+        CampaignBounceLog::$found = $existingBounce;
+
+        $this->sendSignedPayload([
+            'id' => 'evt_hard_after_soft',
+            'type' => 'message.bounced',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'bounce_type' => 'Permanent',
+                'bounce_subtype' => 'General',
+                'diagnostic_code' => '550 mailbox unavailable',
+            ],
+        ], $secret);
+
+        self::assertCount(1, CampaignBounceLog::$saved);
+        self::assertSame(CampaignBounceLog::BOUNCE_HARD, CampaignBounceLog::$saved[0]->bounce_type);
+        self::assertCount(1, $subscriber->blacklistMessages);
+    }
+
+    public function testSignedSoftBounceCannotDowngradeAnEarlierHardBounce(): void
+    {
+        $secret = 'whsec_controller-test';
+        $subscriber = $this->arrangeMatchedCampaign($secret);
+
+        $existingBounce = new CampaignBounceLog();
+        $existingBounce->campaign_id = 17;
+        $existingBounce->subscriber_id = 37;
+        $existingBounce->message = '550 mailbox unavailable';
+        $existingBounce->bounce_type = CampaignBounceLog::BOUNCE_HARD;
+        CampaignBounceLog::$found = $existingBounce;
+
+        $this->sendSignedPayload([
+            'id' => 'evt_soft_after_hard',
+            'type' => 'message.bounced',
+            'data' => [
+                'sender' => 'bounce+CAMPAIGN1+SUBSCRIBER1@example.com',
+                'bounce_type' => 'Transient',
+                'bounce_subtype' => 'General',
+                'diagnostic_code' => '451 try again later',
+            ],
+        ], $secret);
+
+        self::assertSame([], CampaignBounceLog::$saved);
+        self::assertSame(CampaignBounceLog::BOUNCE_HARD, $existingBounce->bounce_type);
+        self::assertSame('550 mailbox unavailable', $existingBounce->message);
+        self::assertSame([], $subscriber->blacklistMessages);
     }
 
     private function arrangeMatchedCampaign(string $secret): ListSubscriber
