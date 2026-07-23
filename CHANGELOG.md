@@ -2,7 +2,7 @@
 
 All notable changes to the Sendmux Sending API Extension will be documented in this file.
 
-## [0.3.0] - 2026-07-22
+## [0.3.0] - 2026-07-23
 
 ### Security
 
